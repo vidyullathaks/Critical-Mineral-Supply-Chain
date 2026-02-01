@@ -1,0 +1,518 @@
+# Cobalt Emissions and Cost Scenario Analysis (Standalone)
+# This script performs scenario analysis based on the provided scenarios table
+# Run this after running the main cobalt emissions and cost calculation
+
+# Load required libraries
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(here)
+library(writexl)
+library(ggplot2)
+
+# Define the base path to the "data" folder
+base_path <- here("data")
+
+# Define file names
+output_data <- "cobalt_emissions_and_cost_output.xlsx"  # Your existing output file
+
+# Define file paths
+output_data_path <- file.path(base_path, output_data)
+
+# Function to check if a file exists and load it
+load_excel_file <- function(file_path, sheet = NULL) {
+  if (file.exists(file_path)) {
+    if (is.null(sheet)) {
+      data <- read_excel(file_path)
+    } else {
+      data <- read_excel(file_path, sheet = sheet)
+    }
+    cat("File loaded successfully:", file_path, "\n")
+    return(data)
+  } else {
+    cat("File not found at:", file_path, "\n")
+    return(NULL)
+  }
+}
+
+# Load the baseline output file
+baseline_df <- load_excel_file(output_data_path)
+if (is.null(baseline_df)) stop("Cannot proceed without the baseline output file.")
+
+# Define emission factors (same as in the main code)
+emission_factors <- list(
+  ipcc = list(sea = 0.047, land = 0.1005, rail = 0.0726),
+  ecoinvent = list(sea = 0.0105, land = 0.154, rail = 0.0615),
+  greet = list(sea = 0.025, land = 0.105, rail = 0.065)
+)
+
+# Define constants for the model
+cathode_per_kg_nmc811 <- 0.37
+total_battery_weight_kg <- 400
+total_cathode_weight_tons <- (total_battery_weight_kg * cathode_per_kg_nmc811) / 1000  # 0.148 tons
+
+# Extract the mining, refining, and cathode totals from the existing data
+total_mining_weight <- sum(baseline_df$Mining, na.rm = TRUE)
+total_refining_weight <- sum(baseline_df$Refining, na.rm = TRUE)
+total_cathode_weight <- sum(baseline_df$Cathode, na.rm = TRUE)
+
+cat("Total Mining Weight:", total_mining_weight, "\n")
+cat("Total Refining Weight:", total_refining_weight, "\n")
+cat("Total Cathode Weight:", total_cathode_weight, "\n")
+
+# Define hardcoded cost per kg for each country based on WITS 2023 data
+# Calculated as: Cost per kg = Trade Value (USD) / Quantity (kg)
+country_costs <- list(
+  "China" = 61.51,       # Using the 8105 code (cobalt and articles)
+  "Japan" = 35.89,
+  "South Korea" = 168.93,
+  "Canada" = 45.37,
+  "Norway" = 37.27,
+  "Australia" = 33.24,
+  "Finland" = 52.06,
+  "Mexico" = 26.00
+)
+
+# Define scenarios based on the table
+scenarios <- list(
+  "BS-2023" = list(
+    name = "Base Scenario 2023",
+    description = "Current situation with battery assembly in US",
+    import_reliance = list(
+      cathode = 1.00,
+      anode = 0.90,
+      electrolyte = 0.98,
+      separator = 0.94
+    ),
+    cobalt_import = 1.00,
+    country_distribution = list(
+      "China" = 0.60,
+      "Japan" = 0.25,
+      "South Korea" = 0.15,
+      "Canada" = 0.00,
+      "Norway" = 0.00,
+      "Australia" = 0.00,
+      "Finland" = 0.00,
+      "Mexico" = 0.00
+    )
+  ),
+  
+  "FS-2032-A" = list(
+    name = "Future Scenario 2032 A",
+    description = "100% US production (post mining import)",
+    import_reliance = list(
+      cathode = 0.00,
+      anode = 0.00,
+      electrolyte = 0.00,
+      separator = 0.00
+    ),
+    cobalt_import = 1.00,
+    country_distribution = list(
+      "China" = 0.30,
+      "Japan" = 0.00,
+      "South Korea" = 0.00,
+      "Canada" = 0.30,
+      "Norway" = 0.00,
+      "Australia" = 0.30,
+      "Finland" = 0.10,
+      "Mexico" = 0.00
+    )
+  ),
+  
+  "FS-2032-B" = list(
+    name = "Future Scenario 2032 B",
+    description = "100% China",
+    import_reliance = list(
+      cathode = 1.00,
+      anode = 1.00,
+      electrolyte = 1.00,
+      separator = 1.00
+    ),
+    cobalt_import = 1.00,
+    country_distribution = list(
+      "China" = 1.00,
+      "Japan" = 0.00,
+      "South Korea" = 0.00,
+      "Canada" = 0.00,
+      "Norway" = 0.00,
+      "Australia" = 0.00,
+      "Finland" = 0.00,
+      "Mexico" = 0.00
+    )
+  ),
+  
+  "FS-2032-C" = list(
+    name = "Future Scenario 2032 C",
+    description = "Only Japan and South Korea suppliers to US",
+    import_reliance = list(
+      cathode = 1.00,
+      anode = 0.90,
+      electrolyte = 0.98,
+      separator = 0.94
+    ),
+    cobalt_import = 0.50,
+    country_distribution = list(
+      "China" = 0.00,
+      "Japan" = 0.60,
+      "South Korea" = 0.40,
+      "Canada" = 0.00,
+      "Norway" = 0.00,
+      "Australia" = 0.00,
+      "Finland" = 0.00,
+      "Mexico" = 0.00
+    )
+  ),
+  
+  "FS-2032-D" = list(
+    name = "Future Scenario 2032 D",
+    description = "Diversified supply: Canada, Norway, Australia, Finland",
+    import_reliance = list(
+      cathode = 0.70,
+      anode = 0.75,
+      electrolyte = 0.80,
+      separator = 0.94
+    ),
+    cobalt_import = 1.00,
+    country_distribution = list(
+      "China" = 0.00,
+      "Japan" = 0.00,
+      "South Korea" = 0.00,
+      "Canada" = 0.35,
+      "Norway" = 0.30,
+      "Australia" = 0.25,
+      "Finland" = 0.10,
+      "Mexico" = 0.00
+    )
+  ),
+  
+  "FS-2032-E" = list(
+    name = "Future Scenario 2032 E",
+    description = "North American + Australia: Canada, Mexico, Australia, Finland",
+    import_reliance = list(
+      cathode = 0.60,
+      anode = 0.70,
+      electrolyte = 0.75,
+      separator = 0.90
+    ),
+    cobalt_import = 1.00,
+    country_distribution = list(
+      "China" = 0.00,
+      "Japan" = 0.00,
+      "South Korea" = 0.00,
+      "Canada" = 0.45,
+      "Norway" = 0.00,
+      "Australia" = 0.15,
+      "Finland" = 0.00,
+      "Mexico" = 0.40
+    )
+  )
+)
+
+# Create a function to adjust weights based on the scenario
+# This function is inspired by the Python function adjust_import
+adjust_country_weights <- function(df, scenario) {
+  # Create a copy of the df
+  adjusted_df <- df
+  
+  # Apply the country distribution to the manufacturing countries
+  manufacturing_countries <- unique(adjusted_df$manufacturing_country)
+  
+  # For cost calculation scenarios
+  # We need to adjust the cathode weights based on the country distribution
+  # and recalculate the weighted % and Contribution (tons)
+  
+  # Step 1: Filter to include only chains with Cathode > 0
+  cathode_chains <- adjusted_df %>% filter(Cathode > 0)
+  non_cathode_chains <- adjusted_df %>% filter(Cathode == 0)
+  
+  # Step 2: Create new chains for each country in the scenario distribution
+  new_cathode_chains <- data.frame()
+  
+  for (country in names(scenario$country_distribution)) {
+    if (scenario$country_distribution[[country]] > 0) {
+      # Create a template row from the first cathode chain
+      template_row <- cathode_chains[1,]
+      
+      # Adjust the values
+      template_row$manufacturing_country <- country
+      template_row$Cathode <- total_cathode_weight * scenario$country_distribution[[country]]
+      template_row$`weighted %` <- scenario$country_distribution[[country]]
+      template_row$`Contribution (tons)` <- total_cathode_weight_tons * scenario$country_distribution[[country]]
+      
+      # Add cost based on the country
+      if (country %in% names(country_costs)) {
+        # Use the hardcoded cost
+        cost_kg_nmc811 <- country_costs[[country]] * cathode_per_kg_nmc811
+        template_row$cost_kg_nmc811 <- cost_kg_nmc811
+        template_row$`Cost (USD)` <- (template_row$`Contribution (tons)` * 1000 / cathode_per_kg_nmc811) * cost_kg_nmc811
+      } else {
+        # Default cost if country not found
+        template_row$cost_kg_nmc811 <- 0
+        template_row$`Cost (USD)` <- 0
+      }
+      
+      # Add the row to the new dataframe
+      new_cathode_chains <- rbind(new_cathode_chains, template_row)
+    }
+  }
+  
+  # Step 3: Combine the new cathode chains with the non-cathode chains
+  if (nrow(new_cathode_chains) > 0) {
+    adjusted_df <- rbind(non_cathode_chains, new_cathode_chains)
+  } else {
+    adjusted_df <- non_cathode_chains
+  }
+  
+  # Apply import reliance to adjust the emissions
+  # For this, we need to adjust the Emission Contribution (tons) based on the cobalt_import factor
+  
+  # For mining chains
+  mining_chains <- adjusted_df %>% filter(Mining > 0)
+  if (nrow(mining_chains) > 0) {
+    adjusted_df$`Emission Contribution (tons)` <- adjusted_df$`Emission Contribution (tons)` * scenario$cobalt_import
+  }
+  
+  # Recalculate emissions based on the adjusted Emission Contribution
+  # This depends on the flow stage and transport types
+  
+  # Initialize the transport types if they're not in the data
+  if (!"transport_type_1" %in% colnames(adjusted_df)) {
+    adjusted_df$transport_type_1 <- ifelse(adjusted_df$emission_ecoinvent_1 > 0, 
+                                           ifelse(adjusted_df$emission_ecoinvent_1 / (adjusted_df$distance_1 * adjusted_df$`Emission Contribution (tons)`) > 0.1, 
+                                                  "truck", "rail"), 
+                                           NA)
+  }
+  
+  if (!"transport_type_2" %in% colnames(adjusted_df)) {
+    adjusted_df$transport_type_2 <- ifelse(adjusted_df$emission_ecoinvent_2 > 0, 
+                                           ifelse(adjusted_df$emission_ecoinvent_2 / (adjusted_df$distance_2 * adjusted_df$`Emission Contribution (tons)`) > 0.1, 
+                                                  "truck", "rail"), 
+                                           NA)
+  }
+  
+  # Recalculate emissions
+  for (source in c("ecoinvent", "greet", "ipcc")) {
+    # Distance 1 emissions
+    adjusted_df[[paste0("emission_", source, "_1")]] <- ifelse(
+      !is.na(adjusted_df$transport_type_1) & adjusted_df$transport_type_1 == "truck" & adjusted_df$distance_1 > 0,
+      adjusted_df$distance_1 * emission_factors[[source]]$land * adjusted_df$`Emission Contribution (tons)`,
+      ifelse(
+        !is.na(adjusted_df$transport_type_1) & adjusted_df$transport_type_1 == "rail" & adjusted_df$distance_1 > 0,
+        adjusted_df$distance_1 * emission_factors[[source]]$rail * adjusted_df$`Emission Contribution (tons)`,
+        0
+      )
+    )
+    
+    # Distance 2 emissions
+    adjusted_df[[paste0("emission_", source, "_2")]] <- ifelse(
+      !is.na(adjusted_df$transport_type_2) & adjusted_df$transport_type_2 == "truck" & adjusted_df$distance_2 > 0,
+      adjusted_df$distance_2 * emission_factors[[source]]$land * adjusted_df$`Emission Contribution (tons)`,
+      ifelse(
+        !is.na(adjusted_df$transport_type_2) & adjusted_df$transport_type_2 == "rail" & adjusted_df$distance_2 > 0,
+        adjusted_df$distance_2 * emission_factors[[source]]$rail * adjusted_df$`Emission Contribution (tons)`,
+        0
+      )
+    )
+    
+    # Sea emissions
+    adjusted_df[[paste0("sea_emission_", source)]] <- ifelse(
+      adjusted_df$sea_distance_km > 0,
+      adjusted_df$sea_distance_km * emission_factors[[source]]$sea * adjusted_df$`Emission Contribution (tons)`,
+      0
+    )
+    
+    # Total emissions
+    adjusted_df[[paste0("total_emission_", source)]] <- 
+      adjusted_df[[paste0("emission_", source, "_1")]] + 
+      adjusted_df[[paste0("emission_", source, "_2")]] + 
+      adjusted_df[[paste0("sea_emission_", source)]]
+  }
+  
+  return(adjusted_df)
+}
+
+# Function to calculate USA emissions based on the Python code
+calculate_usa_emissions <- function(scenario) {
+  # Import reliance for cobalt from the scenario
+  import_reliance_co <- scenario$cobalt_import
+  
+  # Contribution per ton for cobalt
+  co_contribution_per_ton <- 0.0000128
+  
+  # Initialize results
+  usa_emissions <- list()
+  
+  # Calculate domestic emissions for each source
+  for (source in names(emission_factors)) {
+    usa_emissions[[source]] <- co_contribution_per_ton * (1 - import_reliance_co) * 2000 * emission_factors[[source]]$land
+  }
+  
+  return(usa_emissions)
+}
+
+# Function to run a scenario and return results
+run_scenario <- function(scenario_name) {
+  scenario <- scenarios[[scenario_name]]
+  cat("Running scenario:", scenario$name, "\n")
+  
+  # Adjust the baseline data based on the scenario
+  adjusted_df <- adjust_country_weights(baseline_df, scenario)
+  
+  # Calculate total cost
+  total_cost <- sum(adjusted_df$`Cost (USD)`, na.rm = TRUE)
+  
+  # Calculate total emissions for each source
+  total_emissions <- list()
+  for (source in c("ecoinvent", "greet", "ipcc")) {
+    total_emissions[[source]] <- sum(adjusted_df[[paste0("total_emission_", source)]], na.rm = TRUE)
+  }
+  
+  # Calculate USA emissions
+  usa_emissions <- calculate_usa_emissions(scenario)
+  
+  # Combine imported and USA emissions
+  combined_emissions <- list()
+  for (source in names(usa_emissions)) {
+    combined_emissions[[source]] <- total_emissions[[source]] + usa_emissions[[source]]
+  }
+  
+  # Return results
+  return(list(
+    scenario_name = scenario_name,
+    scenario = scenario,
+    total_cost = total_cost,
+    total_emissions = total_emissions,
+    usa_emissions = usa_emissions,
+    combined_emissions = combined_emissions,
+    adjusted_df = adjusted_df
+  ))
+}
+
+# Run all scenarios
+scenario_results <- list()
+for (scenario_name in names(scenarios)) {
+  scenario_results[[scenario_name]] <- run_scenario(scenario_name)
+}
+
+# Create a summary table for comparison
+summary_table <- data.frame(
+  Scenario = character(),
+  Description = character(),
+  Total_Cost_USD = numeric(),
+  Total_Emissions_Ecoinvent = numeric(),
+  Total_Emissions_GREET = numeric(),
+  Total_Emissions_IPCC = numeric(),
+  USA_Emissions_Ecoinvent = numeric(),
+  USA_Emissions_GREET = numeric(),
+  USA_Emissions_IPCC = numeric(),
+  Combined_Emissions_Ecoinvent = numeric(),
+  Combined_Emissions_GREET = numeric(),
+  Combined_Emissions_IPCC = numeric(),
+  stringsAsFactors = FALSE
+)
+
+# Populate the summary table
+for (scenario_name in names(scenario_results)) {
+  result <- scenario_results[[scenario_name]]
+  summary_table <- rbind(summary_table, data.frame(
+    Scenario = scenario_name,
+    Description = result$scenario$description,
+    Total_Cost_USD = result$total_cost,
+    Total_Emissions_Ecoinvent = result$total_emissions$ecoinvent,
+    Total_Emissions_GREET = result$total_emissions$greet,
+    Total_Emissions_IPCC = result$total_emissions$ipcc,
+    USA_Emissions_Ecoinvent = result$usa_emissions$ecoinvent,
+    USA_Emissions_GREET = result$usa_emissions$greet,
+    USA_Emissions_IPCC = result$usa_emissions$ipcc,
+    Combined_Emissions_Ecoinvent = result$combined_emissions$ecoinvent,
+    Combined_Emissions_GREET = result$combined_emissions$greet,
+    Combined_Emissions_IPCC = result$combined_emissions$ipcc,
+    stringsAsFactors = FALSE
+  ))
+}
+
+# Save the summary table
+write_xlsx(summary_table, file.path(base_path, "/cobalt scenario/cobalt_scenario_summary.xlsx"))
+
+# Also save the detailed results for each scenario
+for (scenario_name in names(scenario_results)) {
+  write_xlsx(scenario_results[[scenario_name]]$adjusted_df, 
+             file.path(base_path, paste0("cobalt_scenario_", scenario_name, ".xlsx")))
+}
+
+# Create visualizations
+# 1. Bar chart comparing total costs across scenarios
+png("/visualization/cobalt_scenario_costs.png", width = 3000, height = 1800, res = 300)
+ggplot(summary_table, aes(x = Scenario, y = Total_Cost_USD, fill = Scenario)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Scenario", 
+       y = "Total Cost (USD)", 
+       title = "Cobalt Transport Cost Comparison by Scenario") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+dev.off()
+
+# 2. Bar chart comparing combined emissions across scenarios
+emissions_summary <- summary_table %>%
+  select(Scenario, Combined_Emissions_Ecoinvent, Combined_Emissions_GREET, Combined_Emissions_IPCC) %>%
+  pivot_longer(cols = c(Combined_Emissions_Ecoinvent, Combined_Emissions_GREET, Combined_Emissions_IPCC),
+               names_to = "Emission_Method",
+               values_to = "Emissions") %>%
+  mutate(Emission_Method = gsub("Combined_Emissions_", "", Emission_Method))
+
+png("cobalt_scenario_emissions.png", width = 3000, height = 1800, res = 300)
+ggplot(emissions_summary, aes(x = Scenario, y = Emissions, fill = Emission_Method)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Scenario", 
+       y = "Emissions (kg CO2e)", 
+       title = "Cobalt Transport Emissions Comparison by Scenario",
+       fill = "Emission Method") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_brewer(palette = "Set1")
+dev.off()
+
+# 3. Stacked bar chart showing USA vs imported emissions
+stacked_emissions <- rbind(
+  # Imported emissions
+  summary_table %>%
+    select(Scenario, Total_Emissions_Ecoinvent, Total_Emissions_GREET, Total_Emissions_IPCC) %>%
+    pivot_longer(cols = c(Total_Emissions_Ecoinvent, Total_Emissions_GREET, Total_Emissions_IPCC),
+                 names_to = "Emission_Method",
+                 values_to = "Emissions") %>%
+    mutate(Emission_Method = gsub("Total_Emissions_", "", Emission_Method),
+           Origin = "Imported"),
+  
+  # USA emissions
+  summary_table %>%
+    select(Scenario, USA_Emissions_Ecoinvent, USA_Emissions_GREET, USA_Emissions_IPCC) %>%
+    pivot_longer(cols = c(USA_Emissions_Ecoinvent, USA_Emissions_GREET, USA_Emissions_IPCC),
+                 names_to = "Emission_Method",
+                 values_to = "Emissions") %>%
+    mutate(Emission_Method = gsub("USA_Emissions_", "", Emission_Method),
+           Origin = "USA")
+)
+
+# Create a separate plot for each emission method
+for (method in unique(stacked_emissions$Emission_Method)) {
+  png(paste0("cobalt_scenario_", tolower(method), "_stacked.png"), width = 3000, height = 1800, res = 300)
+  p <- ggplot(stacked_emissions %>% filter(Emission_Method == method), 
+              aes(x = Scenario, y = Emissions, fill = Origin)) +
+    geom_bar(stat = "identity") +
+    labs(x = "Scenario", 
+         y = "Emissions (kg CO2e)", 
+         title = paste0("Cobalt Transport Emissions by Origin (", method, ")"),
+         fill = "Origin") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_fill_brewer(palette = "Set2")
+  print(p)
+  dev.off()
+}
+
+# Print summary information
+cat("\nScenario Analysis Complete!\n")
+cat("Summary of Results:\n")
+print(summary_table)
+cat("\nResults saved to files in:", base_path, "\n")
