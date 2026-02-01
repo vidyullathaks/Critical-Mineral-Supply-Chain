@@ -74,11 +74,11 @@ As EV adoption accelerates, these risks become increasingly material for governm
 ---
 
 ## 📁 Repository Structure
-/R
-/code          # Optimization & analysis scripts
-/data          # Input datasets
-/visualization # Scenario & sensitivity plots
-/docs            # Project report and supporting documents
+- /R
+- /code          # Optimization & analysis scripts
+- /data          # Input datasets
+- /visualization # Scenario & sensitivity plots
+- /docs            # Project report and supporting documents
 ---
 
 ## 👥 Team
