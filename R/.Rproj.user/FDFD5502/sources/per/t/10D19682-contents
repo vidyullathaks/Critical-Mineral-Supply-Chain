@@ -1,0 +1,39 @@
+Image 1: Distribution of Cobalt Transport Cost
+This graph shows how much it might cost to transport cobalt. 
+The middle bump (around $8,000) is the most likely cost. 
+Sometimes it could be cheaper (around $5,000) or more expensive (up to $12,000), but that's less common.
+
+Image 2: Distribution of Cobalt Transport Emissions
+This shows three different ways to measure pollution from transporting cobalt:
+-Red area: First method says about 70 kg of pollution
+-Blue area: Second method says about 85 kg of pollution
+-Green area: Third method says about 130 kg of pollution
+Different methods give different answers.
+
+Image 3: Correlation Matrix
+This is a heat map showing which factors affect each other. Blue squares with numbers close to 1.0 mean those two things are strongly connected. The important observations:
+-Sea distance strongly affects IPCC and GREET emissions (0.74 and 0.66)
+-Land distance strongly affects ecoinvent emissions (0.57)
+-Battery weight and cathode percentage strongly affect cost (0.64 and 0.65)
+
+Image 4: Variable Impact
+This shows what factors matter most for each outcome:
+-Red bars: What affects cost most (cathode percentage and battery weight)
+-Blue bars: What affects ecoinvent emissions most (land distance)
+-Green bars: What affects GREET emissions most (sea distance)
+-Purple bars: What affects IPCC emissions most (sea distance)
+Longer bars mean stronger influence.
+
+Image 5: Top Factors Affecting Cost
+Each panel shows how one factor affects cost:
+-Left: As battery weight increases, cost increases
+-Middle: As cathode percentage increases, cost increases
+-Right: As South Korea's costs increase, overall cost increases
+
+Image 6: Top Factors Affecting Emissions
+Similar to Image 5, but for emissions:
+-Left: As battery weight increases, emissions increase
+-Middle: As cathode percentage increases, emissions increase
+-Right: As land distance increases, emissions increase
+
+The main takeaway is: Battery design factors (weight and cathode percentage) mostly affect cost, while transport distances (sea and land) mostly affect emissions.
